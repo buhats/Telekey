@@ -6,6 +6,4 @@ def speechToText(filename):
     with sr.AudioFile(filename) as source:
         audio_data = rec.record(source)
         text = rec.recognize_google(audio_data)
-        print(text)
-
-
+        return text
