@@ -1,6 +1,8 @@
 from __future__ import division
 import re
 import sys
+import pyautogui
+from pynput.mouse import Button, Controller
 
 from google.cloud import speech
 
@@ -80,7 +82,7 @@ class MicrophoneStream(object):
             yield b"".join(data)
 
 
-def listen_print_loop(responses):
+def listen_loop(responses):
     """Iterates through server responses and prints them.
 
     The responses passed is a generator that will block until a response
@@ -95,6 +97,7 @@ def listen_print_loop(responses):
     the next result to overwrite it, until the response is a final one. For the
     final one, print a newline to preserve the finalized transcription.
     """
+    mouse = Controller()
     num_chars_printed = 0
     for response in responses:
         if not response.results:
@@ -129,6 +132,26 @@ def listen_print_loop(responses):
 
             # Exit recognition if any of the transcribed phrases could be
             # one of our keywords.
+            if re.search(r"\b(click)\b", transcript, re.I):
+                print("Clicking..")
+                mouse.click(Button.left, 1)
+            
+            if re.search(r"\b(right click)\b", transcript, re.I):
+                print("Right Clicking..")
+                mouse.click(Button.right, 1)
+            
+            if re.search(r"\b(double click)\b", transcript, re.I):
+                print("Double Clicking..")
+                mouse.click(Button.left, 2)
+
+            if re.search(r"\b(scroll up)\b", transcript, re.I):
+                print("Scrolling up..")
+                mouse.scroll(0, 5)
+
+            if re.search(r"\b(scroll down)\b", transcript, re.I):
+                print("Scrolling down..")
+                mouse.scroll(0, -5)
+
             if re.search(r"\b(exit|quit)\b", transcript, re.I):
                 print("Exiting..")
                 break
@@ -162,7 +185,7 @@ def main():
         responses = client.streaming_recognize(streaming_config, requests)
 
         # Now, put the transcription responses to use.
-        listen_print_loop(responses)
+        listen_loop(responses)
 
 
 if __name__ == "__main__":
