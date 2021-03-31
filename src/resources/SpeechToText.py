@@ -2,6 +2,7 @@ from __future__ import division
 import re
 import sys
 import pyautogui
+import pynput
 from pynput.mouse import Button, Controller
 
 from google.cloud import speech
@@ -12,6 +13,13 @@ from six.moves import queue
 # Audio recording parameters
 RATE = 16000
 CHUNK = int(RATE / 10)  # 100ms
+
+KEYBOARD_RATE = 5000000000000
+KEYBOARD_CHUNK = int(RATE / 10)  # 100ms
+"""
+API key to run script:
+export GOOGLE_APPLICATION_CREDENTIALS="api_key.json"
+"""
 
 
 class MicrophoneStream(object):
@@ -82,111 +90,123 @@ class MicrophoneStream(object):
             yield b"".join(data)
 
 
-def listen_loop(responses):
-    """Iterates through server responses and prints them.
+class Main(object):
+    
+    def main(self):
+        # See http://g.co/cloud/speech/docs/languages
+        # for a list of supported languages.
+        language_code = "en-US"  # a BCP-47 language tag
 
-    The responses passed is a generator that will block until a response
-    is provided by the server.
-
-    Each response may contain multiple results, and each result may contain
-    multiple alternatives; for details, see https://goo.gl/tjCPAU.  Here we
-    print only the transcription for the top alternative of the top result.
-
-    In this case, responses are provided for interim results as well. If the
-    response is an interim one, print a line feed at the end of it, to allow
-    the next result to overwrite it, until the response is a final one. For the
-    final one, print a newline to preserve the finalized transcription.
-    """
-    mouse = Controller()
-    num_chars_printed = 0
-    for response in responses:
-        if not response.results:
-            continue
-
-        # The `results` list is consecutive. For streaming, we only care about
-        # the first result being considered, since once it's `is_final`, it
-        # moves on to considering the next utterance.
-        result = response.results[0]
-        if not result.alternatives:
-            continue
-
-        # Display the transcription of the top alternative.
-        transcript = result.alternatives[0].transcript
-
-        # Display interim results, but with a carriage return at the end of the
-        # line, so subsequent lines will overwrite them.
-        #
-        # If the previous result was longer than this one, we need to print
-        # some extra spaces to overwrite the previous result
-        overwrite_chars = " " * (num_chars_printed - len(transcript))
-
-        if not result.is_final:
-            sys.stdout.write(transcript + overwrite_chars + "\r")
-            sys.stdout.flush()
-
-            num_chars_printed = len(transcript)
-
-        else:
-            #Final Transcription here
-            print(transcript + overwrite_chars)
-
-            # Exit recognition if any of the transcribed phrases could be
-            # one of our keywords.
-            if re.search(r"\b(click)\b", transcript, re.I):
-                print("Clicking..")
-                mouse.click(Button.left, 1)
-            
-            if re.search(r"\b(right click)\b", transcript, re.I):
-                print("Right Clicking..")
-                mouse.click(Button.right, 1)
-            
-            if re.search(r"\b(double click)\b", transcript, re.I):
-                print("Double Clicking..")
-                mouse.click(Button.left, 2)
-
-            if re.search(r"\b(scroll up)\b", transcript, re.I):
-                print("Scrolling up..")
-                mouse.scroll(0, 5)
-
-            if re.search(r"\b(scroll down)\b", transcript, re.I):
-                print("Scrolling down..")
-                mouse.scroll(0, -5)
-
-            if re.search(r"\b(exit|quit)\b", transcript, re.I):
-                print("Exiting..")
-                break
-
-            num_chars_printed = 0
-
-
-def main():
-    # See http://g.co/cloud/speech/docs/languages
-    # for a list of supported languages.
-    language_code = "en-US"  # a BCP-47 language tag
-
-    client = speech.SpeechClient()
-    config = speech.RecognitionConfig(
-        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-        sample_rate_hertz=RATE,
-        language_code=language_code,
-    )
-
-    streaming_config = speech.StreamingRecognitionConfig(
-        config=config, interim_results=True
-    )
-
-    with MicrophoneStream(RATE, CHUNK) as stream:
-        audio_generator = stream.generator()
-        requests = (
-            speech.StreamingRecognizeRequest(audio_content=content)
-            for content in audio_generator
+        client = speech.SpeechClient()
+        config = speech.RecognitionConfig(
+            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+            sample_rate_hertz=RATE,
+            language_code=language_code,
         )
 
-        responses = client.streaming_recognize(streaming_config, requests)
+        streaming_config = speech.StreamingRecognitionConfig(
+            config=config, interim_results=True
+        )
 
-        # Now, put the transcription responses to use.
-        listen_loop(responses)
+        with MicrophoneStream(RATE, CHUNK) as stream:
+            audio_generator = stream.generator()
+            requests = (
+                speech.StreamingRecognizeRequest(audio_content=content)
+                for content in audio_generator
+            )
 
+            responses = client.streaming_recognize(streaming_config, requests)
+
+            # Now, put the transcription responses to use.
+            self.listen_loop(responses)
+    def listen_loop_keyboard(self, responses):
+        mouse = Controller()
+        num_chars_printed = 0
+        for response in responses:
+            if not response.results:
+                continue
+
+            result = response.results[0]
+            if not result.alternatives:
+                continue
+
+            transcript = result.alternatives[0].transcript
+
+            overwrite_chars = " " * (num_chars_printed - len(transcript))
+
+            if not result.is_final:
+                pass
+                # sys.stdout.write(transcript + overwrite_chars + "\r")
+                # sys.stdout.flush()
+
+                num_chars_printed = len(transcript)
+
+            else:
+                keyboard = pynput.keyboard.Controller()
+                if re.search(r"\b(stop keyboard)\b", transcript, re.I):
+                    keyboard.type(transcript.replace("stop keyboard", ""))
+                    return
+                else:
+                    keyboard.type(transcript)
+                
+         
+    def listen_loop(self, responses):
+        mouse = Controller()
+        num_chars_printed = 0
+        for response in responses:
+            if not response.results:
+                continue
+
+            result = response.results[0]
+            if not result.alternatives:
+                continue
+
+            transcript = result.alternatives[0].transcript
+
+            overwrite_chars = " " * (num_chars_printed - len(transcript))
+
+            if not result.is_final:
+                # sys.stdout.write(transcript + overwrite_chars + "\r")
+                # sys.stdout.flush()
+
+                num_chars_printed = len(transcript)
+
+            else:
+                #Final Transcription here
+                print(transcript + overwrite_chars)
+
+                # Exit recognition if any of the transcribed phrases could be
+                # one of our keywords.
+                if re.search(r"\b(press)\b", transcript, re.I):
+                    print("Clicking..")
+                    mouse.click(Button.left, 1)
+                
+                if re.search(r"\b(right click)\b", transcript, re.I):
+                    print("Right Clicking..")
+                    mouse.click(Button.right, 1)
+                
+                if re.search(r"\b(double click)\b", transcript, re.I):
+                    print("Double Clicking..")
+                    mouse.click(Button.left, 2)
+
+                if re.search(r"\b(scroll up)\b", transcript, re.I):
+                    print("Scrolling up..")
+                    mouse.scroll(0, 15)
+
+                if re.search(r"\b(scroll down)\b", transcript, re.I):
+                    print("Scrolling down..")
+                    mouse.scroll(0, -15)
+
+                if re.search(r"\b(start keyboard)\b", transcript, re.I):
+                    print("Typing..")
+                    self.listen_loop_keyboard(responses)
+
+                if re.search(r"\b(exit|quit)\b", transcript, re.I):
+                    print("Exiting..")
+                    break
+
+                num_chars_printed = 0
 
 if __name__ == "__main__":
-    main()
+    m = Main()
+    m.main()
