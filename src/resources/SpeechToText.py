@@ -14,8 +14,6 @@ from six.moves import queue
 RATE = 16000
 CHUNK = int(RATE / 10)  # 100ms
 
-KEYBOARD_RATE = 5000000000000
-KEYBOARD_CHUNK = int(RATE / 10)  # 100ms
 """
 API key to run script:
 export GOOGLE_APPLICATION_CREDENTIALS="api_key.json"
@@ -144,6 +142,7 @@ class Main(object):
             else:
                 keyboard = pynput.keyboard.Controller()
                 if re.search(r"\b(stop keyboard)\b", transcript, re.I):
+                    print("Stop Keyboard..")
                     keyboard.type(transcript.replace("stop keyboard", ""))
                     return
                 else:
@@ -177,17 +176,21 @@ class Main(object):
 
                 # Exit recognition if any of the transcribed phrases could be
                 # one of our keywords.
+                if re.search(r"\b(right press|rite press)\b", transcript, re.I):
+                    print("Right Clicking..")
+                    mouse.click(Button.right, 1)
+                    continue
+
+                if re.search(r"\b(double-press|double press)\b", transcript, re.I):
+                    print("Double Clicking..")
+                    mouse.click(Button.left, 2)
+                    continue
+
                 if re.search(r"\b(press)\b", transcript, re.I):
                     print("Clicking..")
                     mouse.click(Button.left, 1)
+                    continue
                 
-                if re.search(r"\b(right click)\b", transcript, re.I):
-                    print("Right Clicking..")
-                    mouse.click(Button.right, 1)
-                
-                if re.search(r"\b(double click)\b", transcript, re.I):
-                    print("Double Clicking..")
-                    mouse.click(Button.left, 2)
 
                 if re.search(r"\b(scroll up)\b", transcript, re.I):
                     print("Scrolling up..")
@@ -210,3 +213,4 @@ class Main(object):
 if __name__ == "__main__":
     m = Main()
     m.main()
+
