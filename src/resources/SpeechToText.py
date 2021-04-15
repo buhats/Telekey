@@ -16,7 +16,7 @@ CHUNK = int(RATE / 10)  # 100ms
 
 """
 API key to run script:
-export GOOGLE_APPLICATION_CREDENTIALS="api_key.json"
+export GOOGLE_APPLICATION_CREDENTIALS="tkey_api.json"
 """
 
 
@@ -88,9 +88,9 @@ class MicrophoneStream(object):
             yield b"".join(data)
 
 
-class Main(object):
-    
-    def main(self):
+class VoiceCommands(object):
+
+    def runVoice(self):
         # See http://g.co/cloud/speech/docs/languages
         # for a list of supported languages.
         language_code = "en-US"  # a BCP-47 language tag
@@ -147,8 +147,8 @@ class Main(object):
                     return
                 else:
                     keyboard.type(transcript)
-                
-         
+
+
     def listen_loop(self, responses):
         mouse = Controller()
         num_chars_printed = 0
@@ -179,18 +179,21 @@ class Main(object):
                 if re.search(r"\b(right press|rite press)\b", transcript, re.I):
                     print("Right Clicking..")
                     mouse.click(Button.right, 1)
-                    continue
 
-                if re.search(r"\b(double-press|double press)\b", transcript, re.I):
+                elif re.search(r"\b(press)\b", transcript, re.I):
+                    print("Clicking..")
+                    mouse.click(Button.left, 1)
+
+                elif re.search(r"\b(double press|double-press)\b", transcript, re.I):
                     print("Double Clicking..")
                     mouse.click(Button.left, 2)
                     continue
 
-                if re.search(r"\b(press)\b", transcript, re.I):
+                elif re.search(r"\b(press)\b", transcript, re.I):
                     print("Clicking..")
                     mouse.click(Button.left, 1)
                     continue
-                
+
 
                 if re.search(r"\b(scroll up)\b", transcript, re.I):
                     print("Scrolling up..")
@@ -211,6 +214,5 @@ class Main(object):
                 num_chars_printed = 0
 
 if __name__ == "__main__":
-    m = Main()
-    m.main()
-
+    m = VoiceCommands()
+    m.runVoice()

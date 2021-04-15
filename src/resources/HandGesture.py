@@ -1,139 +1,225 @@
-#------------------------------------------------------------
-# SEGMENT, RECOGNIZE and COUNT fingers from a video sequence
-#------------------------------------------------------------
-
-# organize imports
-#imports for computer commands
-from __future__ import division
-import re
-import sys
-import pyautogui
-import pynput
-from pynput.mouse import Button, Controller
-#imports for finger counting
-import cv2
-import imutils
+from imutils import face_utils
+from utils import *
 import numpy as np
-from sklearn.metrics import pairwise
+import pyautogui as pag
+import imutils
+import dlib
+import cv2
 
-class VideoStream(object):
-
+class GestureCommands(object):
     def __init__(self):
-        self._bg = None
+        pass
+    def runGesture(self):
+        # Thresholds and consecutive frame length for triggering the mouse action.
+        MOUTH_AR_THRESH = 0.6
+        MOUTH_AR_CONSECUTIVE_FRAMES = 15
+        EYE_AR_THRESH = 0.19
+        EYE_AR_CONSECUTIVE_FRAMES = 15
+        WINK_AR_DIFF_THRESH = 0.04
+        WINK_AR_CLOSE_THRESH = 0.19
+        WINK_CONSECUTIVE_FRAMES = 10
 
-    #--------------------------------------------------
-    # To find the running average over the background
-    #--------------------------------------------------
-    def run_avg(self, image, accumWeight):
-        # initialize the background
-        if self._bg is None:
-            self._bg = image.copy().astype("float")
-            return
+        # Initialize the frame counters for each action as well as
+        # booleans used to indicate if action is performed or not
+        MOUTH_COUNTER = 0
+        EYE_COUNTER = 0
+        WINK_COUNTER = 0
+        INPUT_MODE = False
+        EYE_CLICK = False
+        LEFT_WINK = False
+        RIGHT_WINK = False
+        SCROLL_MODE = False
+        ANCHOR_POINT = (0, 0)
+        WHITE_COLOR = (255, 255, 255)
+        YELLOW_COLOR = (0, 255, 255)
+        RED_COLOR = (0, 0, 255)
+        GREEN_COLOR = (0, 255, 0)
+        BLUE_COLOR = (255, 0, 0)
+        BLACK_COLOR = (0, 0, 0)
 
-        # compute weighted average, accumulate it and update the background
-        cv2.accumulateWeighted(image, self._bg, accumWeight)
+        # Initialize Dlib's face detector (HOG-based) and then create
+        # the facial landmark predictor
+        shape_predictor = "model/shape_predictor_68_face_landmarks.dat"
+        detector = dlib.get_frontal_face_detector()
+        predictor = dlib.shape_predictor(shape_predictor)
 
-    #---------------------------------------------
-    # To segment the region of hand in the image
-    #---------------------------------------------
-    def segment(self, image, threshold=35):
-        # find the absolute difference between background and current frame
-        diff = cv2.absdiff(self._bg.astype("uint8"), image)
+        # Grab the indexes of the facial landmarks for the left and
+        # right eye, nose and mouth respectively
+        (lStart, lEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
+        (rStart, rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
+        (nStart, nEnd) = face_utils.FACIAL_LANDMARKS_IDXS["nose"]
+        (mStart, mEnd) = face_utils.FACIAL_LANDMARKS_IDXS["mouth"]
 
-        # threshold the diff image so that we get the foreground
-        thresholded = cv2.threshold(diff, threshold, 255, cv2.THRESH_BINARY)[1]
+        # Video capture
+        vid = cv2.VideoCapture(0)
+        resolution_w = 1366
+        resolution_h = 768
+        cam_w = 640
+        cam_h = 480
+        unit_w = resolution_w / cam_w
+        unit_h = resolution_h / cam_h
 
-        # get the contours in the thresholded image
-        (cnts, _) = cv2.findContours(thresholded.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        while True:
+            # Grab the frame from the threaded video file stream, resize
+            # it, and convert it to grayscale
+            # channels)
+            _, frame = vid.read()
+            frame = cv2.flip(frame, 1)
+            frame = imutils.resize(frame, width=cam_w, height=cam_h)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        # return None, if no contours detected
-        if len(cnts) == 0:
-            return
-        else:
-            # based on contour area, get the maximum contour which is the hand
-            segmented = max(cnts, key=cv2.contourArea)
-            return (thresholded, segmented)
+            # Detect faces in the grayscale frame
+            rects = detector(gray, 0)
 
-    #--------------------------------------------------------------
-    # To count the number of fingers in the segmented hand region
-    #--------------------------------------------------------------
-    def count(self, thresholded, segmented):
-        # find the convex hull of the segmented hand region
-        chull = cv2.convexHull(segmented)
+            # Loop over the face detections
+            if len(rects) > 0:
+                rect = rects[0]
+            else:
+                cv2.imshow("Frame", frame)
+                key = cv2.waitKey(1) & 0xFF
+                continue
 
-        # find the most extreme points in the convex hull
-        extreme_top    = tuple(chull[chull[:, :, 1].argmin()][0])
-        extreme_bottom = tuple(chull[chull[:, :, 1].argmax()][0])
-        extreme_left   = tuple(chull[chull[:, :, 0].argmin()][0])
-        extreme_right  = tuple(chull[chull[:, :, 0].argmax()][0])
+            # Determine the facial landmarks for the face region, then
+            # convert the facial landmark (x, y)-coordinates to a NumPy
+            # array
+            shape = predictor(gray, rect)
+            shape = face_utils.shape_to_np(shape)
 
-        # find the center of the palm
-        cX = int((extreme_left[0] + extreme_right[0]) / 2)
-        cY = int((extreme_top[1] + extreme_bottom[1]) / 2)
+            # Extract the left and right eye coordinates, then use the
+            # coordinates to compute the eye aspect ratio for both eyes
+            mouth = shape[mStart:mEnd]
+            leftEye = shape[lStart:lEnd]
+            rightEye = shape[rStart:rEnd]
+            nose = shape[nStart:nEnd]
 
-        # find the maximum euclidean distance between the center of the palm
-        # and the most extreme points of the convex hull
-        distance = pairwise.euclidean_distances([(cX, cY)], Y=[extreme_left, extreme_right, extreme_top, extreme_bottom])[0]
-        maximum_distance = distance[distance.argmax()]
+            # Because I flipped the frame, left is right, right is left.
+            temp = leftEye
+            leftEye = rightEye
+            rightEye = temp
 
-        # calculate the radius of the circle with 80% of the max euclidean distance obtained
-        radius = int(0.8 * maximum_distance)
+            # Average the mouth aspect ratio together for both eyes
+            mar = mouth_aspect_ratio(mouth)
+            leftEAR = eye_aspect_ratio(leftEye)
+            rightEAR = eye_aspect_ratio(rightEye)
+            ear = (leftEAR + rightEAR) / 2.0
+            diff_ear = np.abs(leftEAR - rightEAR)
 
-        # find the circumference of the circle
-        circumference = (2 * np.pi * radius)
+            nose_point = (nose[3, 0], nose[3, 1])
 
-        # take out the circular region of interest which has 
-        # the palm and the fingers
-        circular_roi = np.zeros(thresholded.shape[:2], dtype="uint8")
-        
-        # draw the circular ROI
-        cv2.circle(circular_roi, (cX, cY), radius, 255, 1)
+            # Compute the convex hull for the left and right eye, then
+            # visualize each of the eyes
+            mouthHull = cv2.convexHull(mouth)
+            leftEyeHull = cv2.convexHull(leftEye)
+            rightEyeHull = cv2.convexHull(rightEye)
+            cv2.drawContours(frame, [mouthHull], -1, YELLOW_COLOR, 1)
+            cv2.drawContours(frame, [leftEyeHull], -1, YELLOW_COLOR, 1)
+            cv2.drawContours(frame, [rightEyeHull], -1, YELLOW_COLOR, 1)
 
-        # take bit-wise AND between thresholded hand using the circular ROI as the mask
-        # which gives the cuts obtained using mask on the thresholded hand image
-        circular_roi = cv2.bitwise_and(thresholded, thresholded, mask=circular_roi)
+            for (x, y) in np.concatenate((mouth, leftEye, rightEye), axis=0):
+                cv2.circle(frame, (x, y), 2, GREEN_COLOR, -1)
 
-        # compute the contours in the circular ROI
-        (cnts, _) = cv2.findContours(circular_roi.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            # Check to see if the eye aspect ratio is below the blink
+            # threshold, and if so, increment the blink frame counter
+            if diff_ear > WINK_AR_DIFF_THRESH:
 
-        # initalize the finger count
-        count = 0
+                if leftEAR < rightEAR:
+                    if leftEAR < EYE_AR_THRESH:
+                        WINK_COUNTER += 1
 
-        # loop through the contours found
-        for c in cnts:
-            # compute the bounding box of the contour
-            (x, y, w, h) = cv2.boundingRect(c)
+                        if WINK_COUNTER > WINK_CONSECUTIVE_FRAMES:
+                            pag.click(button='left')
 
-            # increment the count of fingers only if -
-            # 1. The contour region is not the wrist (bottom area)
-            # 2. The number of points along the contour does not exceed
-            #     25% of the circumference of the circular ROI
-            if ((cY + (cY * 0.25)) > (y + h)) and ((circumference * 0.25) > c.shape[0]):
-                count += 1
+                            WINK_COUNTER = 0
 
-        return count
+                elif leftEAR > rightEAR:
+                    if rightEAR < EYE_AR_THRESH:
+                        WINK_COUNTER += 1
 
-    #-------------------------------------------------------------------------
-    # To perform the correct command depending on the number of fingers shown
-    #-------------------------------------------------------------------------
-    def doCommand(self, finger_count):
-        mouse = Controller()
-        if finger_count==1:
-            print("Clicking..")
-            mouse.click(Button.left, 1)
-                    
-        if finger_count==3:
-            print("Right Clicking..")
-            mouse.click(Button.right, 1)
-        
-        if finger_count==4:
-            print("Double Clicking..")
-            mouse.click(Button.left, 2)
+                        if WINK_COUNTER > WINK_CONSECUTIVE_FRAMES:
+                            pag.click(button='right')
 
-        # while finger_count==2 && moving up:
-        #     print("Scrolling up..")
-        #     mouse.scroll(0, 15)
+                            WINK_COUNTER = 0
+                else:
+                    WINK_COUNTER = 0
+            else:
+                if ear <= EYE_AR_THRESH:
+                    EYE_COUNTER += 1
 
-        # while finger_count==2 && moving down:
-        #     print("Scrolling down..")
-        #     mouse.scroll(0, -15)
+                    if EYE_COUNTER > EYE_AR_CONSECUTIVE_FRAMES:
+                        SCROLL_MODE = not SCROLL_MODE
+                        # INPUT_MODE = not INPUT_MODE
+                        EYE_COUNTER = 0
+
+                        # nose point to draw a bounding box around it
+
+                else:
+                    EYE_COUNTER = 0
+                    WINK_COUNTER = 0
+
+            if mar > MOUTH_AR_THRESH:
+                MOUTH_COUNTER += 1
+
+                if MOUTH_COUNTER >= MOUTH_AR_CONSECUTIVE_FRAMES:
+                    # if the alarm is not on, turn it on
+                    INPUT_MODE = not INPUT_MODE
+                    # SCROLL_MODE = not SCROLL_MODE
+                    MOUTH_COUNTER = 0
+                    ANCHOR_POINT = nose_point
+
+            else:
+                MOUTH_COUNTER = 0
+
+            if INPUT_MODE:
+                cv2.putText(frame, "READING INPUT!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
+                x, y = ANCHOR_POINT
+                nx, ny = nose_point
+                w, h = 60, 35
+                multiple = 1
+                cv2.rectangle(frame, (x - w, y - h), (x + w, y + h), GREEN_COLOR, 2)
+                cv2.line(frame, ANCHOR_POINT, nose_point, BLUE_COLOR, 2)
+
+                dir = direction(nose_point, ANCHOR_POINT, w, h)
+                cv2.putText(frame, dir.upper(), (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
+                drag = 18
+                if dir == 'right':
+                    pag.moveRel(drag, 0)
+                elif dir == 'left':
+                    pag.moveRel(-drag, 0)
+                elif dir == 'up':
+                    if SCROLL_MODE:
+                        pag.scroll(40)
+                    else:
+                        pag.moveRel(0, -drag)
+                elif dir == 'down':
+                    if SCROLL_MODE:
+                        pag.scroll(-40)
+                    else:
+                        pag.moveRel(0, drag)
+
+            if SCROLL_MODE:
+                cv2.putText(frame, 'SCROLL MODE IS ON!', (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
+
+            # cv2.putText(frame, "MAR: {:.2f}".format(mar), (500, 30),
+            #             cv2.FONT_HERSHEY_SIMPLEX, 0.7, YELLOW_COLOR, 2)
+            # cv2.putText(frame, "Right EAR: {:.2f}".format(rightEAR), (460, 80),
+            #             cv2.FONT_HERSHEY_SIMPLEX, 0.7, YELLOW_COLOR, 2)
+            # cv2.putText(frame, "Left EAR: {:.2f}".format(leftEAR), (460, 130),
+            #             cv2.FONT_HERSHEY_SIMPLEX, 0.7, YELLOW_COLOR, 2)
+            # cv2.putText(frame, "Diff EAR: {:.2f}".format(np.abs(leftEAR - rightEAR)), (460, 80),
+            #             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+            # Show the frame
+            cv2.imshow("Frame", frame)
+            key = cv2.waitKey(1) & 0xFF
+
+            # If the `Esc` key was pressed, break from the loop
+            if key == 27:
+                break
+
+        # Do a bit of cleanup
+        cv2.destroyAllWindows()
+        vid.release()
+
+if __name__ == "__main__":
+    m = GestureCommands()
+    m.runGesture()
