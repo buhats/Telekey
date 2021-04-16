@@ -12,6 +12,7 @@ class GestureCommands(object):
     def __init__(self):
         pass
     def runGesture(self):
+        #initialize client socket for receiving commands from Voice
         s = socket.socket()         
         hostname = socket.gethostname()
         ip_address = socket.gethostbyname(hostname)       
@@ -194,27 +195,35 @@ class GestureCommands(object):
                 dir = direction(nose_point, ANCHOR_POINT, w, h)
                 cv2.putText(frame, dir.upper(), (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
                 drag = 18
+
+                #check move mouse right command
                 if dir == 'right':
                     pag.moveRel(drag, 0)
                     data ="gesture: moving mouse right"
+
+                #check move mouse left command
                 elif dir == 'left':
                     pag.moveRel(-drag, 0)
                     data = "gesture: moving mouse left"
-                    
+                
+                #check move mouse up command
                 elif dir == 'up':
                     if SCROLL_MODE:
                         pag.scroll(10)
                         data = "gesture: scrolling up"
-                        
+
+                    #check scroll up command
                     else:
                         pag.moveRel(0, -drag)
                         data = "gesture: moving mouse up"
-                        
+
+                #check move mouse down command     
                 elif dir == 'down':
                     if SCROLL_MODE:
                         pag.scroll(-10)
                         data ="gesture: scrolling down"
-                        
+
+                    #check scroll down command 
                     else:
                         pag.moveRel(0, drag)
                         data = "datagesture: moving mouse down"
@@ -223,6 +232,7 @@ class GestureCommands(object):
             if SCROLL_MODE:
                 cv2.putText(frame, 'SCROLL MODE IS ON!', (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
 
+            #Display last command on screen!
             if type(data) != str:
                 cv2.putText(frame, data.decode('utf-8').strip('\r\n'), (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
             else:
