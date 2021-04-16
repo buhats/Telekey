@@ -5,11 +5,18 @@ import pyautogui as pag
 import imutils
 import dlib
 import cv2
+import socket
+import select
 
 class GestureCommands(object):
     def __init__(self):
         pass
     def runGesture(self):
+        s = socket.socket()         
+        hostname = socket.gethostname()
+        ip_address = socket.gethostbyname(hostname)       
+        port = 5409                 
+        s.connect((ip_address, port))
         # Thresholds and consecutive frame length for triggering the mouse action.
         MOUTH_AR_THRESH = 0.6
         MOUTH_AR_CONSECUTIVE_FRAMES = 15
@@ -58,8 +65,14 @@ class GestureCommands(object):
         cam_h = 480
         unit_w = resolution_w / cam_w
         unit_h = resolution_h / cam_h
-
+        data = "Command: "
         while True:
+            s.setblocking(0)
+
+            ready = select.select([s], [], [], .1)
+            if ready[0]:
+                data = s.recv(4096)
+                print("GOT DATA  BITCH")
             # Grab the frame from the threaded video file stream, resize
             # it, and convert it to grayscale
             # channels)
@@ -183,35 +196,42 @@ class GestureCommands(object):
                 drag = 18
                 if dir == 'right':
                     pag.moveRel(drag, 0)
+                    data ="gesture: moving mouse right"
                 elif dir == 'left':
                     pag.moveRel(-drag, 0)
+                    data = "gesture: moving mouse left"
+                    
                 elif dir == 'up':
                     if SCROLL_MODE:
-                        pag.scroll(40)
+                        pag.scroll(10)
+                        data = "gesture: scrolling up"
+                        
                     else:
                         pag.moveRel(0, -drag)
+                        data = "gesture: moving mouse up"
+                        
                 elif dir == 'down':
                     if SCROLL_MODE:
-                        pag.scroll(-40)
+                        pag.scroll(-10)
+                        data ="gesture: scrolling down"
+                        
                     else:
                         pag.moveRel(0, drag)
+                        data = "datagesture: moving mouse down"
+                        
 
             if SCROLL_MODE:
                 cv2.putText(frame, 'SCROLL MODE IS ON!', (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
 
-            # cv2.putText(frame, "MAR: {:.2f}".format(mar), (500, 30),
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.7, YELLOW_COLOR, 2)
-            # cv2.putText(frame, "Right EAR: {:.2f}".format(rightEAR), (460, 80),
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.7, YELLOW_COLOR, 2)
-            # cv2.putText(frame, "Left EAR: {:.2f}".format(leftEAR), (460, 130),
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.7, YELLOW_COLOR, 2)
-            # cv2.putText(frame, "Diff EAR: {:.2f}".format(np.abs(leftEAR - rightEAR)), (460, 80),
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-
-            # Show the frame
-            cv2.imshow("Frame", frame)
+            if type(data) != str:
+                cv2.putText(frame, data.decode('utf-8').strip('\r\n'), (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
+            else:
+                cv2.putText(frame, data, (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
+     
+            cv2.imshow("TELEKEY", frame)
             key = cv2.waitKey(1) & 0xFF
 
+            # Show the frame
             # If the `Esc` key was pressed, break from the loop
             if key == 27:
                 break

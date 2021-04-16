@@ -2,6 +2,7 @@ from __future__ import division
 import re
 import sys
 import pyautogui
+import socket
 import pynput
 from pynput.mouse import Button, Controller
 
@@ -144,75 +145,96 @@ class VoiceCommands(object):
                 if re.search(r"\b(stop keyboard)\b", transcript, re.I):
                     print("Stop Keyboard..")
                     keyboard.type(transcript.replace("stop keyboard", ""))
-                    return
+                    return True
                 else:
                     keyboard.type(transcript)
 
 
     def listen_loop(self, responses):
-        mouse = Controller()
-        num_chars_printed = 0
-        for response in responses:
-            if not response.results:
-                continue
-
-            result = response.results[0]
-            if not result.alternatives:
-                continue
-
-            transcript = result.alternatives[0].transcript
-
-            overwrite_chars = " " * (num_chars_printed - len(transcript))
-
-            if not result.is_final:
-                # sys.stdout.write(transcript + overwrite_chars + "\r")
-                # sys.stdout.flush()
-
-                num_chars_printed = len(transcript)
-
-            else:
-                #Final Transcription here
-                print(transcript + overwrite_chars)
-
-                # Exit recognition if any of the transcribed phrases could be
-                # one of our keywords.
-                if re.search(r"\b(right press|rite press)\b", transcript, re.I):
-                    print("Right Clicking..")
-                    mouse.click(Button.right, 1)
-
-                elif re.search(r"\b(press)\b", transcript, re.I):
-                    print("Clicking..")
-                    mouse.click(Button.left, 1)
-
-                elif re.search(r"\b(double press|double-press)\b", transcript, re.I):
-                    print("Double Clicking..")
-                    mouse.click(Button.left, 2)
+        while True:
+            c, addr = s.accept()  
+            print('Got connection from', addr)
+            mouse = Controller()
+            num_chars_printed = 0
+            for response in responses:
+                if not response.results:
                     continue
 
-                elif re.search(r"\b(press)\b", transcript, re.I):
-                    print("Clicking..")
-                    mouse.click(Button.left, 1)
+                result = response.results[0]
+                if not result.alternatives:
                     continue
 
+                transcript = result.alternatives[0].transcript
 
-                if re.search(r"\b(scroll up)\b", transcript, re.I):
-                    print("Scrolling up..")
-                    mouse.scroll(0, 15)
+                overwrite_chars = " " * (num_chars_printed - len(transcript))
 
-                if re.search(r"\b(scroll down)\b", transcript, re.I):
-                    print("Scrolling down..")
-                    mouse.scroll(0, -15)
+                if not result.is_final:
+                    # sys.stdout.write(transcript + overwrite_chars + "\r")
+                    # sys.stdout.flush()
 
-                if re.search(r"\b(start keyboard)\b", transcript, re.I):
-                    print("Typing..")
-                    self.listen_loop_keyboard(responses)
+                    num_chars_printed = len(transcript)
 
-                if re.search(r"\b(exit|quit)\b", transcript, re.I):
-                    print("Exiting..")
-                    break
+                else:
+                    #Final Transcription here
+                    print(transcript + overwrite_chars)
 
-                num_chars_printed = 0
+                    # Exit recognition if any of the transcribed phrases could be
+                    # one of our keywords.
+                    if re.search(r"\b(right press|rite press)\b", transcript, re.I):
+                        print("Right Clicking..")
+                        message = "Voice: Right Click"
+                        c.send(message.encode())
+                        mouse.click(Button.right, 1)
+
+
+                    elif re.search(r"\b(double press|double-press)\b", transcript, re.I):
+                        print("Double Clicking..")
+                        mouse.click(Button.left, 2)
+                        message = "Voice: Double Click"
+                        c.send(message.encode())
+                        continue
+
+                    elif re.search(r"\b(press)\b", transcript, re.I):
+                        print("Clicking..")
+                        message = "Voice: Click"
+                        c.send(message.encode())
+                        mouse.click(Button.left, 1)
+                        continue
+
+
+                    if re.search(r"\b(scroll up)\b", transcript, re.I):
+                        print("Scrolling up..")
+                        message = "Voice: Scroll Up"
+                        c.send(message.encode())
+                        mouse.scroll(0, 15)
+
+                    if re.search(r"\b(scroll down)\b", transcript, re.I):
+                        print("Scrolling down..")
+                        message = "Voice: Scroll Down"
+                        c.send(message.encode())
+                        mouse.scroll(0, -15)
+
+                    if re.search(r"\b(start keyboard)\b", transcript, re.I):
+                        print("Typing..")
+                        message = "Voice: Typing"
+                        c.send(message.encode())
+                        if self.listen_loop_keyboard(responses):
+                            message = "Voice: Stop Typing"
+                            c.send(message.encode())
+
+                    if re.search(r"\b(exit|quit)\b", transcript, re.I):
+                        print("Exiting..")
+                        break
+
+                    num_chars_printed = 0
 
 if __name__ == "__main__":
+    s = socket.socket()
+    hostname = socket.gethostname()
+    ip_address = socket.gethostbyname(hostname)
+    port = 5409
+    s.bind((ip_address, port))
+
+    s.listen(2)
     m = VoiceCommands()
     m.runVoice()
