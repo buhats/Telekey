@@ -199,34 +199,34 @@ class GestureCommands(object):
                 #check move mouse right command
                 if dir == 'right':
                     pag.moveRel(drag, 0)
-                    data ="gesture: moving mouse right"
+                    data ="Gesture: moving mouse right"
 
                 #check move mouse left command
                 elif dir == 'left':
                     pag.moveRel(-drag, 0)
-                    data = "gesture: moving mouse left"
+                    data = "Gesture: moving mouse left"
                 
                 #check move mouse up command
                 elif dir == 'up':
                     if SCROLL_MODE:
                         pag.scroll(10)
-                        data = "gesture: scrolling up"
+                        data = "Gesture: scrolling up"
 
                     #check scroll up command
                     else:
                         pag.moveRel(0, -drag)
-                        data = "gesture: moving mouse up"
+                        data = "Gesture: moving mouse up"
 
                 #check move mouse down command     
                 elif dir == 'down':
                     if SCROLL_MODE:
                         pag.scroll(-10)
-                        data ="gesture: scrolling down"
+                        data ="Gesture: scrolling down"
 
                     #check scroll down command 
                     else:
                         pag.moveRel(0, drag)
-                        data = "datagesture: moving mouse down"
+                        data = "Gesture: moving mouse down"
                         
 
             if SCROLL_MODE:
