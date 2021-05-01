@@ -152,8 +152,6 @@ class VoiceCommands(object):
 
     def listen_loop(self, responses):
         while True:
-            c, addr = s.accept()  
-            print('Got connection from', addr)
             mouse = Controller()
             num_chars_printed = 0
             for response in responses:
@@ -185,7 +183,7 @@ class VoiceCommands(object):
                     if re.search(r"\b(right press|rite press)\b", transcript, re.I):
                         print("Right Clicking..")
                         message = "Voice: Right Click"
-                        c.send(message.encode())
+                        # c.send(message.encode())
                         mouse.click(Button.right, 1)
 
                     #Check for Double Click command and send message to client
@@ -193,13 +191,13 @@ class VoiceCommands(object):
                         print("Double Clicking..")
                         mouse.click(Button.left, 2)
                         message = "Voice: Double Click"
-                        c.send(message.encode())
+                        # c.send(message.encode())
                         continue
                     #Check for Click command and send message to client
                     elif re.search(r"\b(press)\b", transcript, re.I):
                         print("Clicking..")
                         message = "Voice: Click"
-                        c.send(message.encode())
+                        # c.send(message.encode())
                         mouse.click(Button.left, 1)
                         continue
 
@@ -207,24 +205,24 @@ class VoiceCommands(object):
                     if re.search(r"\b(scroll up)\b", transcript, re.I):
                         print("Scrolling up..")
                         message = "Voice: Scroll Up"
-                        c.send(message.encode())
+                        # c.send(message.encode())
                         mouse.scroll(0, 15)
 
                     #Check for Scroll DOWN command and send message to client
                     if re.search(r"\b(scroll down)\b", transcript, re.I):
                         print("Scrolling down..")
                         message = "Voice: Scroll Down"
-                        c.send(message.encode())
+                        # c.send(message.encode())
                         mouse.scroll(0, -15)
 
                     #Check for Keyboard command and send message to client
                     if re.search(r"\b(start keyboard)\b", transcript, re.I):
                         print("Typing..")
                         message = "Voice: Typing"
-                        c.send(message.encode())
+                        # c.send(message.encode())
                         if self.listen_loop_keyboard(responses):
                             message = "Voice: Stop Typing"
-                            c.send(message.encode())
+                            # c.send(message.encode())
 
                             
                     #Check for exit command and send message to client
@@ -234,14 +232,11 @@ class VoiceCommands(object):
 
                     num_chars_printed = 0
 
+class SpeechMain(object):
+    def runMain(self):
+        m = VoiceCommands()
+        m.runVoice()
 if __name__ == "__main__":
     #initialize server socket to send messages to gesture script
-    s = socket.socket()
-    hostname = socket.gethostname()
-    ip_address = socket.gethostbyname(hostname)
-    port = 5409
-    s.bind((ip_address, port))
-
-    s.listen(2)
-    m = VoiceCommands()
-    m.runVoice()
+    m = SpeechMain()
+    m.runMain()

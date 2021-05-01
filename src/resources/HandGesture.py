@@ -7,17 +7,18 @@ import dlib
 import cv2
 import socket
 import select
+import pickle
+import struct
+import zlib
 
 class GestureCommands(object):
     def __init__(self):
         pass
     def runGesture(self):
         #initialize client socket for receiving commands from Voice
-        s = socket.socket()         
-        hostname = socket.gethostname()
-        ip_address = socket.gethostbyname(hostname)       
-        port = 5409                 
-        s.connect((ip_address, port))
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.connect((socket.gethostname(), 5409))
+        connection = client_socket.makefile('wb')
         # Thresholds and consecutive frame length for triggering the mouse action.
         MOUTH_AR_THRESH = 0.6
         MOUTH_AR_CONSECUTIVE_FRAMES = 15
@@ -67,13 +68,13 @@ class GestureCommands(object):
         unit_w = resolution_w / cam_w
         unit_h = resolution_h / cam_h
         data = "Command: "
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
         while True:
-            s.setblocking(0)
+            # s.setblocking(0)
 
-            ready = select.select([s], [], [], .1)
-            if ready[0]:
-                data = s.recv(4096)
-                print("GOT DATA  BITCH")
+            # ready = select.select([s], [], [], .1)
+            # if ready[0]:
+            #     data = s.recv(4096)
             # Grab the frame from the threaded video file stream, resize
             # it, and convert it to grayscale
             # channels)
@@ -184,7 +185,7 @@ class GestureCommands(object):
                 MOUTH_COUNTER = 0
 
             if INPUT_MODE:
-                cv2.putText(frame, "READING INPUT!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
+                #Text(frame, "READING INPUT!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
                 x, y = ANCHOR_POINT
                 nx, ny = nose_point
                 w, h = 60, 35
@@ -233,23 +234,28 @@ class GestureCommands(object):
                 cv2.putText(frame, 'SCROLL MODE IS ON!', (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
 
             #Display last command on screen!
-            if type(data) != str:
-                cv2.putText(frame, data.decode('utf-8').strip('\r\n'), (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
-            else:
-                cv2.putText(frame, data, (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
-     
-            cv2.imshow("TELEKEY", frame)
-            key = cv2.waitKey(1) & 0xFF
+            #cv2.putText(frame, data, (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED_COLOR, 2)
+
+            result, frame = cv2.imencode('.jpg', frame, encode_param)
+            data = pickle.dumps(frame, 0)
+            size = len(data)
+            client_socket.sendall(struct.pack(">L", size) + data)
+            # cv2.imshow("TELEKEY", frame)
+            #key = cv2.waitKey(1) & 0xFF
 
             # Show the frame
             # If the `Esc` key was pressed, break from the loop
-            if key == 27:
-                break
+            # if key == 27:
+            #     break
 
         # Do a bit of cleanup
         cv2.destroyAllWindows()
         vid.release()
-
+class GestureMain(object):
+    def runMain(self):
+        m = GestureCommands()
+        m.runGesture()
 if __name__ == "__main__":
-    m = GestureCommands()
-    m.runGesture()
+    #initialize server socket to send messages to gesture script
+    m = GestureMain()
+    m.runMain()
