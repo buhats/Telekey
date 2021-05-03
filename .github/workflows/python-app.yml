@@ -33,3 +33,6 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Install Dependencies
       run: pip install -r ./src/resources/requirements.txt
+      
+    - name: Test Overall App
+      run: python3 ./src/resources/main.py
