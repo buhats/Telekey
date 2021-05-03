@@ -33,4 +33,4 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistic
       
     - name: Test Overall App
-      run: python3 ./src/resources/main.py
+      run: python3 ./src/resources/Telekey.sh
